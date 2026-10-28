@@ -1,0 +1,799 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Minhas Contas">
+<meta name="theme-color" content="#2563eb">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Minhas Contas</title>
+<style>
+  :root {
+    --bg: #f3f4f6; --card: #ffffff; --text: #111827; --muted: #6b7280;
+    --primary: #2563eb; --ok: #16a34a; --late: #dc2626; --border: #e5e7eb; --done: #7c3aed;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f172a; --card: #1e293b; --text: #f1f5f9; --muted: #94a3b8; --border: #334155;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f172a; --card: #1e293b; --text: #f1f5f9; --muted: #94a3b8; --border: #334155;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    padding: env(safe-area-inset-top) 0 calc(96px + env(safe-area-inset-bottom));
+  }
+  header {
+    background: var(--primary); color: #fff; padding: 20px 16px 16px;
+    position: sticky; top: 0; z-index: 5;
+  }
+  header h1 { margin: 0; font-size: 22px; }
+  .summary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .summary div { background: rgba(255,255,255,.15); border-radius: 12px; padding: 10px; }
+  .summary small { opacity: .85; font-size: 12px; }
+  .summary strong { display: block; font-size: 18px; margin-top: 2px; }
+  .tabs { display: flex; gap: 8px; margin-top: 12px; }
+  .tab {
+    flex: 1; border: none; background: rgba(255,255,255,.18); color: #fff;
+    border-radius: 10px; padding: 9px; font-size: 15px; cursor: pointer;
+  }
+  .tab.active { background: #fff; color: var(--primary); font-weight: 600; }
+  main { padding: 12px 16px; max-width: 640px; margin: 0 auto; }
+  .filters { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; }
+  .chip {
+    border: 1px solid var(--border); background: var(--card); color: var(--text);
+    border-radius: 999px; padding: 6px 14px; font-size: 14px; white-space: nowrap; cursor: pointer;
+  }
+  .chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .section-head {
+    display: flex; align-items: center; justify-content: space-between; margin: 18px 0 8px;
+  }
+  .section-head h2 { font-size: 16px; margin: 0; }
+  .item {
+    background: var(--card); border-radius: 14px; padding: 14px; margin-bottom: 10px;
+    display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--border);
+  }
+  .item .info { flex: 1; min-width: 0; }
+  .item .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .meta { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .item .prog { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .item .amount { font-weight: 700; white-space: nowrap; text-align: right; }
+  .item.selected { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary) inset; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; color: #fff; align-self: flex-end; }
+  .paid { background: var(--ok); } .open { background: var(--muted); }
+  .late { background: var(--late); } .done { background: var(--done); }
+  .actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+  .btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 10px; max-width: 200px; }
+  .btn-small {
+    border: none; background: transparent; color: var(--primary); font-size: 13px; cursor: pointer; padding: 2px;
+  }
+  .pick { display: flex; align-items: center; padding-top: 4px; }
+  .pick input { width: 20px; height: 20px; margin: 0; }
+  .selbox {
+    background: var(--card); border: 2px solid var(--primary); border-radius: 14px;
+    padding: 14px; margin-bottom: 10px;
+  }
+  .selbox .total { font-size: 20px; font-weight: 700; margin: 4px 0; }
+  .selbox .names { color: var(--muted); font-size: 13px; }
+  .empty { text-align: center; color: var(--muted); padding: 24px 16px; }
+  .fab {
+    position: fixed; right: 20px; bottom: calc(20px + env(safe-area-inset-bottom));
+    width: 60px; height: 60px; border-radius: 50%; border: none; background: var(--primary);
+    color: #fff; font-size: 32px; box-shadow: 0 6px 18px rgba(0,0,0,.25); cursor: pointer;
+  }
+  .add-btn {
+    border: 1px solid var(--primary); background: transparent; color: var(--primary);
+    border-radius: 999px; padding: 5px 12px; font-size: 13px; cursor: pointer;
+  }
+  .hidden { display: none !important; }
+  dialog {
+    border: none; border-radius: 18px; width: min(92vw, 420px); padding: 20px;
+    background: var(--card); color: var(--text);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.5); }
+  dialog h2 { margin: 0 0 14px; font-size: 19px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+  label.check { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 15px; }
+  label.check input { width: auto; margin: 0; }
+  input, select {
+    display: block; width: 100%; margin-top: 4px; padding: 11px; font-size: 16px;
+    border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text);
+  }
+  .row { display: flex; gap: 10px; } .row > * { flex: 1; }
+  .dialog-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+  .dialog-buttons button {
+    padding: 10px 18px; border-radius: 10px; border: none; font-size: 15px; cursor: pointer;
+    background: var(--bg); color: var(--text);
+  }
+  .dialog-buttons .primary { background: var(--primary); color: #fff; }
+  .dialog-buttons .danger { background: var(--late); color: #fff; margin-right: auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Minhas Contas</h1>
+  <div class="summary">
+    <div><small id="sumLabel1">A pagar este mês</small><strong id="sumValue1">R$ 0,00</strong></div>
+    <div><small id="sumLabel2">Pagas este mês</small><strong id="sumValue2">R$ 0,00</strong></div>
+  </div>
+  <div class="tabs">
+    <button class="tab active" data-tab="contas">Contas</button>
+    <button class="tab" data-tab="bancos">Bancos</button>
+  </div>
+</header>
+
+<main>
+  <!-- Aba Contas -->
+  <section id="viewContas">
+    <div class="filters">
+      <button class="chip active" data-filter="all">Todas</button>
+      <button class="chip" data-filter="open">Em aberto</button>
+      <button class="chip" data-filter="late">Atrasadas</button>
+      <button class="chip" data-filter="paid">Pagas</button>
+      <button class="chip" data-filter="done">Quitadas</button>
+    </div>
+    <button class="chip" id="notifyBtn" style="margin:10px 0">Ativar avisos</button>
+    <div id="list"></div>
+  </section>
+
+  <!-- Aba Bancos -->
+  <section id="viewBancos" class="hidden">
+    <div class="section-head">
+      <h2>Bancos</h2>
+      <button class="add-btn" id="addBank">+ Banco</button>
+    </div>
+    <div id="selBox" class="selbox hidden"></div>
+    <div id="bankList"></div>
+
+    <div class="section-head">
+      <h2>Cobranças (a receber / recebidas)</h2>
+      <button class="add-btn" id="addRecv">+ Cobrança</button>
+    </div>
+    <div id="recvList"></div>
+
+    <div class="section-head">
+      <h2>Gastos extras</h2>
+      <button class="add-btn" id="addExp">+ Gasto</button>
+    </div>
+    <div id="expList"></div>
+  </section>
+</main>
+
+<button class="fab" id="addBtn" aria-label="Nova conta">+</button>
+
+<!-- Formulário de conta (aba Contas) -->
+<dialog id="dlg">
+  <form method="dialog" id="form">
+    <h2 id="dlgTitle">Nova conta</h2>
+    <label>Nome da conta
+      <input name="name" required placeholder="Ex: Energia, Internet, Financiamento do carro">
+    </label>
+    <div class="row">
+      <label>Valor (R$)
+        <input name="amount" type="number" step="0.01" min="0" required inputmode="decimal">
+      </label>
+      <label>Dia de vencimento
+        <input name="due" type="number" min="1" max="31" required inputmode="numeric">
+      </label>
+    </div>
+    <label>Número de parcelas (vazio = conta mensal fixa)
+      <input name="installments" type="number" min="1" inputmode="numeric" placeholder="Ex: 12">
+    </label>
+    <label>Categoria
+      <select name="category">
+        <option>Casa</option><option>Contas de consumo</option><option>Assinaturas</option>
+        <option>Cartão de crédito</option><option>Financiamento</option><option>Outros</option>
+      </select>
+    </label>
+    <label>Chave PIX (opcional)
+      <input name="pix" placeholder="CPF, e-mail, telefone ou chave aleatória">
+    </label>
+    <label>Observação
+      <input name="notes" placeholder="Opcional">
+    </label>
+    <label class="check">
+      <input type="checkbox" name="notify" checked> Avisar quando estiver perto do vencimento
+    </label>
+    <div class="dialog-buttons">
+      <button type="button" class="danger" id="delBtn" hidden>Excluir</button>
+      <button type="button" id="cancelBtn">Cancelar</button>
+      <button type="submit" class="primary">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Formulário genérico (bancos, cobranças, gastos) -->
+<dialog id="fdlg">
+  <form id="fform">
+    <h2 id="fTitle"></h2>
+    <div id="fFields"></div>
+    <div class="dialog-buttons" id="fButtons"></div>
+  </form>
+</dialog>
+
+<script>
+(() => {
+  const K_CONTAS = "minhas-contas-v1";
+  const K_BANCOS = "minhas-contas-bancos-v1";
+  const NOTIFY_KEY = "minhas-contas-avisos";
+  const DAYS_AHEAD = 3;
+  const fmt = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+  const $ = id => document.getElementById(id);
+
+  let accounts = [];
+  let banks = [], receivables = [], expenses = [];
+  let tab = "contas";
+  let filter = "all";
+  let editingId = null;
+  let selected = new Set();
+
+  // ---------- Armazenamento ----------
+  function readJSON(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
+    catch { return fallback; }
+  }
+  function saveAll() {
+    try {
+      localStorage.setItem(K_CONTAS, JSON.stringify(accounts));
+      localStorage.setItem(K_BANCOS, JSON.stringify({ banks, receivables, expenses }));
+    } catch { alert("Não foi possível salvar os dados neste navegador."); }
+  }
+  function loadAll() {
+    accounts = migrate(readJSON(K_CONTAS, []));
+    const b = readJSON(K_BANCOS, { banks: [], receivables: [], expenses: [] });
+    banks = b.banks || [];
+    receivables = b.receivables || [];
+    expenses = b.expenses || [];
+  }
+  function changed() { saveAll(); render(); }
+
+  // ---------- Contas (mensal / parcelas) ----------
+  // Mês no formato AAAA-MM. "paid" guarda os meses já pagos de cada conta.
+  const monthKey = (d = new Date()) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const cur = () => monthKey();
+  function addMonths(key, n) {
+    const [y, m] = key.split("-").map(Number);
+    return monthKey(new Date(y, m - 1 + n, 1));
+  }
+  function migrate(list) {
+    return list.map(a => {
+      if (!Array.isArray(a.paid)) a.paid = a.paidMonth ? [a.paidMonth] : [];
+      delete a.paidMonth;
+      a.paid = a.paid.map(k => k.replace(/-(\d)$/, "-0$1"));
+      return a;
+    });
+  }
+  const isPaidNow = a => a.paid.includes(cur());
+  const isDone = a => a.installments != null && a.paid.length >= a.installments;
+  function statusOf(a) {
+    if (isDone(a)) return "done";
+    if (isPaidNow(a)) return "paid";
+    return new Date().getDate() > a.due ? "late" : "open";
+  }
+  function toggleCurrent(a) {
+    const k = cur();
+    a.paid = isPaidNow(a) ? a.paid.filter(x => x !== k) : [...a.paid, k];
+  }
+  // Paga a próxima parcela pendente, mesmo que o mês ainda não tenha chegado.
+  function advance(a) {
+    const last = a.paid.length ? [...a.paid].sort().pop() : addMonths(cur(), -1);
+    a.paid = [...a.paid, addMonths(last, 1)];
+  }
+
+  // ---------- Bancos ----------
+  const bankName = id => (banks.find(b => b.id === id) || {}).name || "Sem banco";
+  function bankBalance(b) {
+    const recv = receivables.filter(r => r.received && r.bank === b.id).reduce((s, r) => s + +r.amount, 0);
+    const exp = expenses.filter(e => e.bank === b.id).reduce((s, e) => s + +e.amount, 0);
+    return (+b.initial || 0) + recv - exp;
+  }
+  function bankRecv(b) {
+    return receivables.filter(r => r.received && r.bank === b.id).reduce((s, r) => s + +r.amount, 0);
+  }
+  function bankExp(b) {
+    return expenses.filter(e => e.bank === b.id).reduce((s, e) => s + +e.amount, 0);
+  }
+  const sum = (arr, fn) => arr.reduce((s, x) => s + fn(x), 0);
+  const recvPending = () => sum(receivables.filter(r => !r.received), r => +r.amount);
+  function bankTotals() {
+    const inBanks = sum(banks, bankBalance);
+    const unassignedRecv = sum(receivables.filter(r => r.received && !r.bank), r => +r.amount);
+    const unassignedExp = sum(expenses.filter(e => !e.bank), e => +e.amount);
+    return inBanks + unassignedRecv - unassignedExp;
+  }
+
+  // ---------- Renderização ----------
+  function render() {
+    renderSummary();
+    if (tab === "contas") renderContas(); else renderBancos();
+  }
+
+  function renderSummary() {
+    if (tab === "contas") {
+      let open = 0, paid = 0;
+      accounts.forEach(a => {
+        if (isPaidNow(a)) paid += +a.amount;
+        else if (!isDone(a)) open += +a.amount;
+      });
+      $("sumLabel1").textContent = "A pagar este mês";
+      $("sumValue1").textContent = fmt.format(open);
+      $("sumLabel2").textContent = "Pagas este mês";
+      $("sumValue2").textContent = fmt.format(paid);
+    } else {
+      $("sumLabel1").textContent = "Saldo geral";
+      $("sumValue1").textContent = fmt.format(bankTotals());
+      $("sumLabel2").textContent = "A receber";
+      $("sumValue2").textContent = fmt.format(recvPending());
+    }
+  }
+
+  function renderContas() {
+    const list = $("list");
+    const items = accounts
+      .filter(a => {
+        if (filter === "all") return true;
+        if (filter === "paid") return isPaidNow(a);
+        if (filter === "done") return isDone(a);
+        return statusOf(a) === filter;
+      })
+      .sort((a, b) => a.due - b.due);
+
+    if (!items.length) {
+      list.innerHTML = `<div class="empty">Nenhuma conta aqui.<br>Toque no + para adicionar.</div>`;
+      return;
+    }
+    list.innerHTML = "";
+    items.forEach(a => list.appendChild(buildAccountItem(a)));
+  }
+
+  function buildAccountItem(a) {
+    const st = statusOf(a);
+    const label = { paid: "Paga", open: "Em aberto", late: "Atrasada", done: "Quitada" }[st];
+    const el = document.createElement("div");
+    el.className = "item";
+    el.innerHTML = `
+      <div class="info">
+        <div class="name"></div>
+        <div class="meta"></div>
+        <div class="prog"></div>
+      </div>
+      <div class="actions">
+        <div class="amount"></div>
+        <span class="badge ${st}">${label}</span>
+        <div class="btns"></div>
+      </div>`;
+    el.querySelector(".name").textContent = a.name;
+    el.querySelector(".meta").textContent =
+      `Vence dia ${a.due} · ${a.category}` + (a.notes ? ` · ${a.notes}` : "");
+    el.querySelector(".amount").textContent = fmt.format(+a.amount);
+    el.querySelector(".prog").textContent = a.installments
+      ? `${Math.min(a.paid.length, a.installments)} de ${a.installments} parcelas pagas`
+      : "Conta mensal fixa";
+
+    const btns = el.querySelector(".btns");
+    const add = (text, fn) => {
+      const b = document.createElement("button");
+      b.className = "btn-small";
+      b.textContent = text;
+      b.onclick = fn;
+      btns.appendChild(b);
+      return b;
+    };
+    if (!isDone(a)) {
+      add(isPaidNow(a) ? "Desmarcar" : "Marcar paga", () => { toggleCurrent(a); changed(); });
+      add("Adiantar próxima", () => { advance(a); changed(); });
+    }
+    if (a.pix) {
+      const pixBtn = add("Copiar PIX", async () => {
+        try {
+          await navigator.clipboard.writeText(a.pix);
+          pixBtn.textContent = "Copiado!";
+        } catch {
+          prompt("Copie a chave PIX:", a.pix);
+        }
+        setTimeout(() => pixBtn.textContent = "Copiar PIX", 1500);
+      });
+    }
+    add(a.notify === false ? "Ativar aviso" : "Desativar aviso", () => {
+      a.notify = a.notify === false;
+      changed();
+    });
+    add("Editar", () => openAccountDialog(a));
+    return el;
+  }
+
+  function renderBancos() {
+    // Seleção: remove bancos que não existem mais
+    selected = new Set([...selected].filter(id => banks.some(b => b.id === id)));
+
+    const selBox = $("selBox");
+    if (selected.size) {
+      const chosen = banks.filter(b => selected.has(b.id));
+      const total = sum(chosen, bankBalance);
+      selBox.classList.remove("hidden");
+      selBox.innerHTML = `
+        <div class="names">Juntos (${chosen.length} banco${chosen.length > 1 ? "s" : ""})</div>
+        <div class="total">${fmt.format(total)}</div>
+        <div class="names">${chosen.map(b => b.name).join(" + ")}</div>
+        <div class="dialog-buttons" style="margin-top:8px">
+          <button class="btn-small" id="clearSel">Limpar seleção</button>
+        </div>`;
+      $("clearSel").onclick = () => { selected.clear(); render(); };
+    } else {
+      selBox.classList.add("hidden");
+      selBox.innerHTML = "";
+    }
+
+    const bankList = $("bankList");
+    bankList.innerHTML = banks.length ? "" : `<div class="empty">Nenhum banco cadastrado. Toque em + Banco.</div>`;
+    banks.forEach(b => {
+      const el = document.createElement("div");
+      el.className = "item" + (selected.has(b.id) ? " selected" : "");
+      el.innerHTML = `
+        <label class="pick"><input type="checkbox"></label>
+        <div class="info">
+          <div class="name"></div>
+          <div class="meta"></div>
+        </div>
+        <div class="actions">
+          <div class="amount"></div>
+          <div class="btns"><button class="btn-small">Editar</button></div>
+        </div>`;
+      el.querySelector(".name").textContent = b.name;
+      el.querySelector(".meta").textContent =
+        `Inicial ${fmt.format(+b.initial || 0)} · Recebido ${fmt.format(bankRecv(b))} · Gastos ${fmt.format(bankExp(b))}`;
+      el.querySelector(".amount").textContent = fmt.format(bankBalance(b));
+      const cb = el.querySelector("input");
+      cb.checked = selected.has(b.id);
+      cb.onchange = () => {
+        cb.checked ? selected.add(b.id) : selected.delete(b.id);
+        render();
+      };
+      el.querySelector("button").onclick = () => openBankDialog(b);
+      bankList.appendChild(el);
+    });
+
+    const recvList = $("recvList");
+    const recvs = [...receivables].sort((a, b) => a.received - b.received || a.from.localeCompare(b.from));
+    recvList.innerHTML = recvs.length ? "" : `<div class="empty">Nenhuma cobrança. Toque em + Cobrança.</div>`;
+    recvs.forEach(r => {
+      const el = document.createElement("div");
+      el.className = "item";
+      el.innerHTML = `
+        <div class="info">
+          <div class="name"></div>
+          <div class="meta"></div>
+        </div>
+        <div class="actions">
+          <div class="amount"></div>
+          <span class="badge ${r.received ? "paid" : "late"}">${r.received ? "Recebido" : "A receber"}</span>
+          <div class="btns"></div>
+        </div>`;
+      el.querySelector(".name").textContent = r.from;
+      el.querySelector(".meta").textContent =
+        `Banco: ${bankName(r.bank)}` + (r.notes ? ` · ${r.notes}` : "");
+      el.querySelector(".amount").textContent = fmt.format(+r.amount);
+      const btns = el.querySelector(".btns");
+      const toggle = document.createElement("button");
+      toggle.className = "btn-small";
+      toggle.textContent = r.received ? "Desfazer recebimento" : "Confirmar recebimento";
+      toggle.onclick = () => { r.received = !r.received; changed(); };
+      const edit = document.createElement("button");
+      edit.className = "btn-small";
+      edit.textContent = "Editar";
+      edit.onclick = () => openRecvDialog(r);
+      btns.append(toggle, edit);
+      recvList.appendChild(el);
+    });
+
+    const expList = $("expList");
+    const exps = [...expenses].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    expList.innerHTML = exps.length ? "" : `<div class="empty">Nenhum gasto extra. Toque em + Gasto.</div>`;
+    exps.forEach(e => {
+      const el = document.createElement("div");
+      el.className = "item";
+      el.innerHTML = `
+        <div class="info">
+          <div class="name"></div>
+          <div class="meta"></div>
+        </div>
+        <div class="actions">
+          <div class="amount"></div>
+          <div class="btns"><button class="btn-small">Editar</button></div>
+        </div>`;
+      el.querySelector(".name").textContent = e.desc;
+      el.querySelector(".meta").textContent =
+        `${bankName(e.bank)}` + (e.date ? ` · ${formatDate(e.date)}` : "");
+      el.querySelector(".amount").textContent = "− " + fmt.format(+e.amount);
+      el.querySelector("button").onclick = () => openExpDialog(e);
+      expList.appendChild(el);
+    });
+  }
+
+  const formatDate = iso => {
+    const [y, m, d] = iso.split("-");
+    return `${d}/${m}/${y}`;
+  };
+
+  // ---------- Formulário genérico ----------
+  let onFormSave = null;
+  const bankOptions = () => [["", "Sem banco"], ...banks.map(b => [b.id, b.name])];
+
+  function fieldHtml(d) {
+    if (d.type === "check") {
+      return `<label class="check"><input type="checkbox" name="${d.name}"> ${d.label}</label>`;
+    }
+    if (d.type === "select") {
+      return `<label>${d.label}<select name="${d.name}">${
+        d.options.map(([v, l]) => `<option value="${v}">${l}</option>`).join("")
+      }</select></label>`;
+    }
+    return `<label>${d.label}<input name="${d.name}" type="${d.type || "text"}"` +
+      (d.required ? " required" : "") +
+      (d.step ? ` step="${d.step}"` : "") +
+      (d.min != null ? ` min="${d.min}"` : "") +
+      (d.inputmode ? ` inputmode="${d.inputmode}"` : "") +
+      (d.placeholder ? ` placeholder="${d.placeholder}"` : "") +
+      `></label>`;
+  }
+
+  function openForm({ title, fields, values = {}, onSave, onDelete }) {
+    const f = $("fform");
+    $("fTitle").textContent = title;
+    $("fFields").innerHTML = fields.map(fieldHtml).join("");
+    $("fButtons").innerHTML =
+      (onDelete ? `<button type="button" class="danger" id="fDel">Excluir</button>` : "") +
+      `<button type="button" id="fCancel">Cancelar</button>` +
+      `<button type="submit" class="primary">Salvar</button>`;
+    fields.forEach(d => {
+      const el = f.elements[d.name];
+      if (!el) return;
+      if (d.type === "check") el.checked = values[d.name] ?? !!d.default;
+      else el.value = values[d.name] ?? d.default ?? "";
+    });
+    $("fCancel").onclick = () => $("fdlg").close();
+    if (onDelete) $("fDel").onclick = () => { $("fdlg").close(); onDelete(); };
+    f.onsubmit = e => {
+      e.preventDefault();
+      const out = {};
+      fields.forEach(d => {
+        const el = f.elements[d.name];
+        out[d.name] =
+          d.type === "check" ? el.checked :
+          d.type === "number" ? (parseFloat(el.value) || 0) :
+          el.value.trim();
+      });
+      $("fdlg").close();
+      onSave(out);
+    };
+    $("fdlg").showModal();
+  }
+
+  const today = () => new Date().toISOString().slice(0, 10);
+
+  function openBankDialog(b = null) {
+    openForm({
+      title: b ? "Editar banco" : "Novo banco",
+      fields: [
+        { name: "name", label: "Nome do banco", required: true, placeholder: "Ex: Nubank, Itaú" },
+        { name: "initial", label: "Saldo inicial (R$)", type: "number", step: "0.01", min: "0", inputmode: "decimal", default: 0 },
+      ],
+      values: b || {},
+      onDelete: b ? () => deleteBank(b) : null,
+      onSave: data => {
+        if (b) Object.assign(b, data);
+        else banks.push({ id: newId(), ...data });
+        changed();
+      },
+    });
+  }
+
+  function deleteBank(b) {
+    if (!confirm(`Excluir o banco "${b.name}"? Cobranças e gastos dele ficam sem banco.`)) return;
+    banks = banks.filter(x => x.id !== b.id);
+    receivables.forEach(r => { if (r.bank === b.id) r.bank = null; });
+    expenses.forEach(e => { if (e.bank === b.id) e.bank = null; });
+    selected.delete(b.id);
+    changed();
+  }
+
+  function openRecvDialog(r = null) {
+    openForm({
+      title: r ? "Editar cobrança" : "Nova cobrança",
+      fields: [
+        { name: "from", label: "De quem (pessoa ou empresa)", required: true, placeholder: "Ex: João" },
+        { name: "amount", label: "Valor (R$)", type: "number", step: "0.01", min: "0", required: true, inputmode: "decimal" },
+        { name: "bank", label: "Em qual banco vai cair", type: "select", options: bankOptions() },
+        { name: "received", label: "Já recebi", type: "check", default: false },
+        { name: "notes", label: "Observação", placeholder: "Opcional" },
+      ],
+      values: r ? { ...r, bank: r.bank || "" } : {},
+      onDelete: r ? () => {
+        if (confirm("Excluir esta cobrança?")) {
+          receivables = receivables.filter(x => x !== r);
+          changed();
+        }
+      } : null,
+      onSave: data => {
+        const obj = { ...data, bank: data.bank || null };
+        if (r) Object.assign(r, obj);
+        else receivables.push({ id: newId(), ...obj });
+        changed();
+      },
+    });
+  }
+
+  function openExpDialog(e = null) {
+    openForm({
+      title: e ? "Editar gasto" : "Novo gasto extra",
+      fields: [
+        { name: "desc", label: "Descrição", required: true, placeholder: "Ex: Conserto do carro" },
+        { name: "amount", label: "Valor (R$)", type: "number", step: "0.01", min: "0", required: true, inputmode: "decimal" },
+        { name: "date", label: "Data", type: "date", default: today() },
+        { name: "bank", label: "De qual banco saiu", type: "select", options: bankOptions() },
+      ],
+      values: e ? { ...e, bank: e.bank || "" } : {},
+      onDelete: e ? () => {
+        if (confirm("Excluir este gasto?")) {
+          expenses = expenses.filter(x => x !== e);
+          changed();
+        }
+      } : null,
+      onSave: data => {
+        const obj = { ...data, bank: data.bank || null };
+        if (e) Object.assign(e, obj);
+        else expenses.push({ id: newId(), ...obj });
+        changed();
+      },
+    });
+  }
+
+  const newId = () => crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
+
+  // ---------- Formulário de conta (aba Contas) ----------
+  const dlg = $("dlg");
+  const form = $("form");
+  const delBtn = $("delBtn");
+
+  function openAccountDialog(account = null) {
+    editingId = account ? account.id : null;
+    $("dlgTitle").textContent = account ? "Editar conta" : "Nova conta";
+    delBtn.hidden = !account;
+    form.reset();
+    form.notify.checked = true;
+    if (account) {
+      form.name.value = account.name;
+      form.amount.value = account.amount;
+      form.due.value = account.due;
+      form.installments.value = account.installments ?? "";
+      form.category.value = account.category;
+      form.notes.value = account.notes || "";
+      form.pix.value = account.pix || "";
+      form.notify.checked = account.notify !== false;
+    }
+    dlg.showModal();
+  }
+
+  form.addEventListener("submit", e => {
+    e.preventDefault();
+    const n = parseInt(form.installments.value, 10);
+    const data = {
+      name: form.name.value.trim(),
+      amount: parseFloat(form.amount.value) || 0,
+      due: Math.min(31, Math.max(1, parseInt(form.due.value, 10) || 1)),
+      installments: n > 0 ? n : null,
+      category: form.category.value,
+      notes: form.notes.value.trim(),
+      pix: form.pix.value.trim(),
+      notify: form.notify.checked,
+    };
+    if (editingId) {
+      Object.assign(accounts.find(a => a.id === editingId), data);
+    } else {
+      accounts.push({ id: newId(), paid: [], ...data });
+    }
+    changed(); dlg.close();
+  });
+
+  delBtn.onclick = () => {
+    if (editingId && confirm("Excluir esta conta?")) {
+      accounts = accounts.filter(a => a.id !== editingId);
+      changed(); dlg.close();
+    }
+  };
+  $("cancelBtn").onclick = () => dlg.close();
+
+  // ---------- Eventos de navegação ----------
+  document.querySelectorAll(".tab").forEach(btn => btn.onclick = () => {
+    document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    tab = btn.dataset.tab;
+    $("viewContas").classList.toggle("hidden", tab !== "contas");
+    $("viewBancos").classList.toggle("hidden", tab !== "bancos");
+    $("addBtn").classList.toggle("hidden", tab !== "contas");
+    render();
+  });
+
+  document.querySelectorAll(".chip[data-filter]").forEach(btn => btn.onclick = () => {
+    document.querySelectorAll(".chip[data-filter]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    filter = btn.dataset.filter;
+    render();
+  });
+
+  $("addBtn").onclick = () => openAccountDialog();
+  $("addBank").onclick = () => openBankDialog();
+  $("addRecv").onclick = () => openRecvDialog();
+  $("addExp").onclick = () => openExpDialog();
+
+  // ---------- Avisos (só contas) ----------
+  // O iPhone só mostra notificações de um app instalado na Tela de Início (iOS 16.4+).
+  // Sem servidor, os avisos saem quando o app é aberto ou fica visível.
+  const notifyBtn = $("notifyBtn");
+
+  function daysUntilDue(a) {
+    const t = new Date();
+    const due = new Date(t.getFullYear(), t.getMonth(), a.due);
+    const now = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+    return Math.round((due - now) / 864e5);
+  }
+
+  function checkDue() {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let sent = {};
+    try { sent = JSON.parse(localStorage.getItem(NOTIFY_KEY) || "{}"); } catch {}
+    accounts.forEach(a => {
+      if (a.notify === false || isPaidNow(a) || isDone(a)) return;
+      const left = daysUntilDue(a);
+      if (left > DAYS_AHEAD) return;
+      const tag = `${a.id}-${todayStr}`;
+      if (sent[tag]) return;
+      const body = left < 0 ? `Atrasada! Venceu dia ${a.due}.`
+        : left === 0 ? "Vence hoje."
+        : `Vence em ${left} dia(s), dia ${a.due}.`;
+      try {
+        new Notification(`${a.name} · ${fmt.format(+a.amount)}`, { body, tag, icon: "icon-192.png" });
+        sent[tag] = true;
+      } catch {}
+    });
+    try { localStorage.setItem(NOTIFY_KEY, JSON.stringify(sent)); } catch {}
+  }
+
+  function refreshNotifyBtn() {
+    if (!("Notification" in window)) { notifyBtn.hidden = true; return; }
+    notifyBtn.textContent = Notification.permission === "granted" ? "Avisos ativados" : "Ativar avisos";
+    notifyBtn.disabled = Notification.permission === "granted";
+  }
+
+  notifyBtn.onclick = async () => {
+    try { await Notification.requestPermission(); } catch {}
+    refreshNotifyBtn();
+    checkDue();
+  };
+
+  // ---------- Início ----------
+  loadAll();
+  render();
+  refreshNotifyBtn();
+  checkDue();
+  setInterval(checkDue, 60 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") { loadAll(); render(); checkDue(); }
+  });
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
