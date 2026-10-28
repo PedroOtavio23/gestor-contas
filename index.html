@@ -47,15 +47,18 @@
   .chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
   .item {
     background: var(--card); border-radius: 14px; padding: 14px; margin-bottom: 10px;
-    display: flex; gap: 12px; align-items: center; border: 1px solid var(--border);
+    display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--border);
   }
   .item .info { flex: 1; min-width: 0; }
   .item .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .item .meta { color: var(--muted); font-size: 13px; margin-top: 3px; }
-  .item .amount { font-weight: 700; white-space: nowrap; }
-  .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; color: #fff; }
-  .paid { background: var(--ok); } .open { background: var(--muted); } .late { background: var(--late); }
+  .item .prog { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .item .amount { font-weight: 700; white-space: nowrap; text-align: right; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; color: #fff; align-self: flex-end; }
+  .paid { background: var(--ok); } .open { background: var(--muted); }
+  .late { background: var(--late); } .done { background: #7c3aed; }
   .actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+  .btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 10px; max-width: 200px; }
   .btn-small {
     border: none; background: transparent; color: var(--primary); font-size: 13px; cursor: pointer; padding: 2px;
   }
@@ -72,6 +75,8 @@
   dialog::backdrop { background: rgba(0,0,0,.5); }
   dialog h2 { margin: 0 0 14px; font-size: 19px; }
   label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+  label.check { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 15px; }
+  label.check input { width: auto; margin: 0; }
   input, select {
     display: block; width: 100%; margin-top: 4px; padding: 11px; font-size: 16px;
     border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text);
@@ -102,6 +107,7 @@
     <button class="chip" data-filter="open">Em aberto</button>
     <button class="chip" data-filter="late">Atrasadas</button>
     <button class="chip" data-filter="paid">Pagas</button>
+    <button class="chip" data-filter="done">Quitadas</button>
   </div>
   <button class="chip" id="notifyBtn" style="margin:10px 0">Ativar avisos</button>
   <div id="list"></div>
@@ -113,7 +119,7 @@
   <form method="dialog" id="form">
     <h2 id="dlgTitle">Nova conta</h2>
     <label>Nome da conta
-      <input name="name" required placeholder="Ex: Energia, Internet, Aluguel">
+      <input name="name" required placeholder="Ex: Energia, Internet, Financiamento do carro">
     </label>
     <div class="row">
       <label>Valor (R$)
@@ -123,6 +129,9 @@
         <input name="due" type="number" min="1" max="31" required inputmode="numeric">
       </label>
     </div>
+    <label>Número de parcelas (vazio = conta mensal fixa)
+      <input name="installments" type="number" min="1" inputmode="numeric" placeholder="Ex: 12">
+    </label>
     <label>Categoria
       <select name="category">
         <option>Casa</option><option>Contas de consumo</option><option>Assinaturas</option>
@@ -135,6 +144,9 @@
     <label>Observação
       <input name="notes" placeholder="Opcional">
     </label>
+    <label class="check">
+      <input type="checkbox" name="notify" checked> Avisar quando estiver perto do vencimento
+    </label>
     <div class="dialog-buttons">
       <button type="button" class="danger" id="delBtn" hidden>Excluir</button>
       <button type="button" id="cancelBtn">Cancelar</button>
@@ -146,14 +158,35 @@
 <script>
 (() => {
   const KEY = "minhas-contas-v1";
+  const NOTIFY_KEY = "minhas-contas-avisos";
+  const DAYS_AHEAD = 3;
   const fmt = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
   let accounts = [];
   let filter = "all";
   let editingId = null;
 
+  // Mês no formato AAAA-MM. "paid" guarda os meses já pagos de cada conta,
+  // e cada entrada vale como uma parcela (ou um mês, em conta mensal fixa).
+  const monthKey = (d = new Date()) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const cur = () => monthKey();
+  function addMonths(key, n) {
+    const [y, m] = key.split("-").map(Number);
+    return monthKey(new Date(y, m - 1 + n, 1));
+  }
+
+  function migrate(list) {
+    return list.map(a => {
+      if (!Array.isArray(a.paid)) a.paid = a.paidMonth ? [a.paidMonth] : [];
+      delete a.paidMonth;
+      a.paid = a.paid.map(k => k.replace(/-(\d)$/, "-0$1"));
+      return a;
+    });
+  }
+
   function load() {
-    try { accounts = JSON.parse(localStorage.getItem(KEY) || "[]"); }
+    try { accounts = migrate(JSON.parse(localStorage.getItem(KEY) || "[]")); }
     catch { accounts = []; }
   }
   function save() {
@@ -161,26 +194,42 @@
     catch { alert("Não foi possível salvar os dados neste navegador."); }
   }
 
-  // Ciclo mensal: "paid" vale só para o mês/ano em que foi marcada.
-  const monthKey = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}`; };
-  function isPaid(a) { return a.paidMonth === monthKey(); }
-  function isLate(a) {
-    if (isPaid(a)) return false;
-    return new Date().getDate() > a.due;
-  }
+  const isPaidNow = a => a.paid.includes(cur());
+  const isDone = a => a.installments != null && a.paid.length >= a.installments;
   function statusOf(a) {
-    if (isPaid(a)) return "paid";
-    return isLate(a) ? "late" : "open";
+    if (isDone(a)) return "done";
+    if (isPaidNow(a)) return "paid";
+    return new Date().getDate() > a.due ? "late" : "open";
   }
+
+  function toggleCurrent(a) {
+    const k = cur();
+    a.paid = isPaidNow(a) ? a.paid.filter(x => x !== k) : [...a.paid, k];
+  }
+  // Paga a próxima parcela pendente, mesmo que o mês ainda não tenha chegado.
+  function advance(a) {
+    const last = a.paid.length ? [...a.paid].sort().pop() : addMonths(cur(), -1);
+    a.paid = [...a.paid, addMonths(last, 1)];
+  }
+
+  function changed() { save(); render(); }
 
   function render() {
     const list = document.getElementById("list");
     const items = accounts
-      .filter(a => filter === "all" || statusOf(a) === filter)
+      .filter(a => {
+        if (filter === "all") return true;
+        if (filter === "paid") return isPaidNow(a);
+        if (filter === "done") return isDone(a);
+        return statusOf(a) === filter;
+      })
       .sort((a, b) => a.due - b.due);
 
     let open = 0, paid = 0;
-    accounts.forEach(a => isPaid(a) ? paid += +a.amount : open += +a.amount);
+    accounts.forEach(a => {
+      if (isPaidNow(a)) paid += +a.amount;
+      else if (!isDone(a)) open += +a.amount;
+    });
     document.getElementById("totalOpen").textContent = fmt.format(open);
     document.getElementById("totalPaid").textContent = fmt.format(paid);
 
@@ -189,36 +238,54 @@
       return;
     }
     list.innerHTML = "";
-    items.forEach(a => {
-      const st = statusOf(a);
-      const label = { paid: "Paga", open: "Em aberto", late: "Atrasada" }[st];
-      const el = document.createElement("div");
-      el.className = "item";
-      el.innerHTML = `
-        <div class="info">
-          <div class="name"></div>
-          <div class="meta"></div>
-        </div>
-        <div class="actions">
-          <div class="amount"></div>
-          <span class="badge ${st}">${label}</span>
-          <div>
-            <button class="btn-small" data-act="toggle">${isPaid(a) ? "Desmarcar" : "Marcar paga"}</button>
-            ${a.pix ? '<button class="btn-small" data-act="pix">Copiar PIX</button>' : ""}
-            <button class="btn-small" data-act="edit">Editar</button>
-          </div>
-        </div>`;
-      el.querySelector(".name").textContent = a.name;
-      el.querySelector(".meta").textContent =
-        `Vence dia ${a.due} · ${a.category}` + (a.notes ? ` · ${a.notes}` : "");
-      el.querySelector(".amount").textContent = fmt.format(+a.amount);
-      el.querySelector('[data-act="toggle"]').onclick = () => {
-        a.paidMonth = isPaid(a) ? null : monthKey();
-        save(); render();
-      };
-      el.querySelector('[data-act="edit"]').onclick = () => openDialog(a);
-      const pixBtn = el.querySelector('[data-act="pix"]');
-      if (pixBtn) pixBtn.onclick = async () => {
+    items.forEach(a => list.appendChild(buildItem(a)));
+  }
+
+  function buildItem(a) {
+    const st = statusOf(a);
+    const label = { paid: "Paga", open: "Em aberto", late: "Atrasada", done: "Quitada" }[st];
+    const el = document.createElement("div");
+    el.className = "item";
+    el.innerHTML = `
+      <div class="info">
+        <div class="name"></div>
+        <div class="meta"></div>
+        <div class="prog"></div>
+      </div>
+      <div class="actions">
+        <div class="amount"></div>
+        <span class="badge ${st}">${label}</span>
+        <div class="btns"></div>
+      </div>`;
+    el.querySelector(".name").textContent = a.name;
+    el.querySelector(".meta").textContent =
+      `Vence dia ${a.due} · ${a.category}` + (a.notes ? ` · ${a.notes}` : "");
+    el.querySelector(".amount").textContent = fmt.format(+a.amount);
+
+    const prog = el.querySelector(".prog");
+    if (a.installments) {
+      const n = a.installments;
+      prog.textContent = `${Math.min(a.paid.length, n)} de ${n} parcelas pagas`;
+    } else {
+      prog.textContent = "Conta mensal fixa";
+    }
+
+    const btns = el.querySelector(".btns");
+    const add = (text, fn) => {
+      const b = document.createElement("button");
+      b.className = "btn-small";
+      b.textContent = text;
+      b.onclick = fn;
+      btns.appendChild(b);
+      return b;
+    };
+
+    if (!isDone(a)) {
+      add(isPaidNow(a) ? "Desmarcar" : "Marcar paga", () => { toggleCurrent(a); changed(); });
+      add("Adiantar próxima", () => { advance(a); changed(); });
+    }
+    if (a.pix) {
+      const pixBtn = add("Copiar PIX", async () => {
         try {
           await navigator.clipboard.writeText(a.pix);
           pixBtn.textContent = "Copiado!";
@@ -226,9 +293,14 @@
           prompt("Copie a chave PIX:", a.pix);
         }
         setTimeout(() => pixBtn.textContent = "Copiar PIX", 1500);
-      };
-      list.appendChild(el);
+      });
+    }
+    add(a.notify === false ? "Ativar aviso" : "Desativar aviso", () => {
+      a.notify = a.notify === false;
+      changed();
     });
+    add("Editar", () => openDialog(a));
+    return el;
   }
 
   const dlg = document.getElementById("dlg");
@@ -240,46 +312,56 @@
     document.getElementById("dlgTitle").textContent = account ? "Editar conta" : "Nova conta";
     delBtn.hidden = !account;
     form.reset();
+    form.notify.checked = true;
     if (account) {
       form.name.value = account.name;
       form.amount.value = account.amount;
       form.due.value = account.due;
+      form.installments.value = account.installments ?? "";
       form.category.value = account.category;
       form.notes.value = account.notes || "";
       form.pix.value = account.pix || "";
+      form.notify.checked = account.notify !== false;
     }
     dlg.showModal();
   }
 
   form.addEventListener("submit", e => {
     e.preventDefault();
+    const n = parseInt(form.installments.value, 10);
     const data = {
       name: form.name.value.trim(),
       amount: parseFloat(form.amount.value) || 0,
       due: Math.min(31, Math.max(1, parseInt(form.due.value, 10) || 1)),
+      installments: n > 0 ? n : null,
       category: form.category.value,
       notes: form.notes.value.trim(),
       pix: form.pix.value.trim(),
+      notify: form.notify.checked,
     };
     if (editingId) {
       Object.assign(accounts.find(a => a.id === editingId), data);
     } else {
-      accounts.push({ id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()), paidMonth: null, ...data });
+      accounts.push({
+        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+        paid: [],
+        ...data,
+      });
     }
-    save(); render(); dlg.close();
+    changed(); dlg.close();
   });
 
   delBtn.onclick = () => {
     if (editingId && confirm("Excluir esta conta?")) {
       accounts = accounts.filter(a => a.id !== editingId);
-      save(); render(); dlg.close();
+      changed(); dlg.close();
     }
   };
   document.getElementById("cancelBtn").onclick = () => dlg.close();
   document.getElementById("addBtn").onclick = () => openDialog();
 
-  document.querySelectorAll(".chip").forEach(btn => btn.onclick = () => {
-    document.querySelectorAll(".chip").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".chip[data-filter]").forEach(btn => btn.onclick = () => {
+    document.querySelectorAll(".chip[data-filter]").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     filter = btn.dataset.filter;
     render();
@@ -287,8 +369,6 @@
 
   // Avisos: o iPhone só mostra notificações de um app instalado na Tela de Início
   // (iOS 16.4+). Sem servidor, os avisos saem quando o app é aberto ou fica visível.
-  const NOTIFY_KEY = "minhas-contas-avisos";
-  const DAYS_AHEAD = 3;
   const notifyBtn = document.getElementById("notifyBtn");
 
   function daysUntilDue(a) {
@@ -304,7 +384,7 @@
     let sent = {};
     try { sent = JSON.parse(localStorage.getItem(NOTIFY_KEY) || "{}"); } catch {}
     accounts.forEach(a => {
-      if (isPaid(a)) return;
+      if (a.notify === false || isPaidNow(a) || isDone(a)) return;
       const left = daysUntilDue(a);
       if (left > DAYS_AHEAD) return;
       const tag = `${a.id}-${today}`;
