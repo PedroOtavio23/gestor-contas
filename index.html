@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Minhas Contas">
+<meta name="theme-color" content="#2563eb">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Minhas Contas</title>
+<style>
+  :root {
+    --bg: #f3f4f6; --card: #ffffff; --text: #111827; --muted: #6b7280;
+    --primary: #2563eb; --ok: #16a34a; --late: #dc2626; --border: #e5e7eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f172a; --card: #1e293b; --text: #f1f5f9; --muted: #94a3b8; --border: #334155;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f172a; --card: #1e293b; --text: #f1f5f9; --muted: #94a3b8; --border: #334155;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    padding: env(safe-area-inset-top) 0 calc(96px + env(safe-area-inset-bottom));
+  }
+  header {
+    background: var(--primary); color: #fff; padding: 20px 16px 16px;
+    position: sticky; top: 0; z-index: 5;
+  }
+  header h1 { margin: 0; font-size: 22px; }
+  .summary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .summary div { background: rgba(255,255,255,.15); border-radius: 12px; padding: 10px; }
+  .summary small { opacity: .85; font-size: 12px; }
+  .summary strong { display: block; font-size: 18px; margin-top: 2px; }
+  main { padding: 12px 16px; max-width: 640px; margin: 0 auto; }
+  .filters { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; }
+  .chip {
+    border: 1px solid var(--border); background: var(--card); color: var(--text);
+    border-radius: 999px; padding: 6px 14px; font-size: 14px; white-space: nowrap; cursor: pointer;
+  }
+  .chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .item {
+    background: var(--card); border-radius: 14px; padding: 14px; margin-bottom: 10px;
+    display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--border);
+  }
+  .item .info { flex: 1; min-width: 0; }
+  .item .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .meta { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .item .prog { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .item .amount { font-weight: 700; white-space: nowrap; text-align: right; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; color: #fff; align-self: flex-end; }
+  .paid { background: var(--ok); } .open { background: var(--muted); }
+  .late { background: var(--late); } .done { background: #7c3aed; }
+  .actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+  .btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 10px; max-width: 200px; }
+  .btn-small {
+    border: none; background: transparent; color: var(--primary); font-size: 13px; cursor: pointer; padding: 2px;
+  }
+  .empty { text-align: center; color: var(--muted); padding: 40px 16px; }
+  .fab {
+    position: fixed; right: 20px; bottom: calc(20px + env(safe-area-inset-bottom));
+    width: 60px; height: 60px; border-radius: 50%; border: none; background: var(--primary);
+    color: #fff; font-size: 32px; box-shadow: 0 6px 18px rgba(0,0,0,.25); cursor: pointer;
+  }
+  dialog {
+    border: none; border-radius: 18px; width: min(92vw, 420px); padding: 20px;
+    background: var(--card); color: var(--text);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.5); }
+  dialog h2 { margin: 0 0 14px; font-size: 19px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+  label.check { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 15px; }
+  label.check input { width: auto; margin: 0; }
+  input, select {
+    display: block; width: 100%; margin-top: 4px; padding: 11px; font-size: 16px;
+    border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text);
+  }
+  .row { display: flex; gap: 10px; } .row > * { flex: 1; }
+  .dialog-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+  .dialog-buttons button {
+    padding: 10px 18px; border-radius: 10px; border: none; font-size: 15px; cursor: pointer;
+    background: var(--bg); color: var(--text);
+  }
+  .dialog-buttons .primary { background: var(--primary); color: #fff; }
+  .dialog-buttons .danger { background: var(--late); color: #fff; margin-right: auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Minhas Contas</h1>
+  <div class="summary">
+    <div><small>A pagar este mês</small><strong id="totalOpen">R$ 0,00</strong></div>
+    <div><small>Pagas este mês</small><strong id="totalPaid">R$ 0,00</strong></div>
+  </div>
+</header>
+
+<main>
+  <div class="filters">
+    <button class="chip active" data-filter="all">Todas</button>
+    <button class="chip" data-filter="open">Em aberto</button>
+    <button class="chip" data-filter="late">Atrasadas</button>
+    <button class="chip" data-filter="paid">Pagas</button>
+    <button class="chip" data-filter="done">Quitadas</button>
+  </div>
+  <button class="chip" id="notifyBtn" style="margin:10px 0">Ativar avisos</button>
+  <div id="list"></div>
+</main>
+
+<button class="fab" id="addBtn" aria-label="Nova conta">+</button>
+
+<dialog id="dlg">
+  <form method="dialog" id="form">
+    <h2 id="dlgTitle">Nova conta</h2>
+    <label>Nome da conta
+      <input name="name" required placeholder="Ex: Energia, Internet, Financiamento do carro">
+    </label>
+    <div class="row">
+      <label>Valor (R$)
+        <input name="amount" type="number" step="0.01" min="0" required inputmode="decimal">
+      </label>
+      <label>Dia de vencimento
+        <input name="due" type="number" min="1" max="31" required inputmode="numeric">
+      </label>
+    </div>
+    <label>Número de parcelas (vazio = conta mensal fixa)
+      <input name="installments" type="number" min="1" inputmode="numeric" placeholder="Ex: 12">
+    </label>
+    <label>Categoria
+      <select name="category">
+        <option>Casa</option><option>Contas de consumo</option><option>Assinaturas</option>
+        <option>Cartão de crédito</option><option>Financiamento</option><option>Outros</option>
+      </select>
+    </label>
+    <label>Chave PIX (opcional)
+      <input name="pix" placeholder="CPF, e-mail, telefone ou chave aleatória">
+    </label>
+    <label>Observação
+      <input name="notes" placeholder="Opcional">
+    </label>
+    <label class="check">
+      <input type="checkbox" name="notify" checked> Avisar quando estiver perto do vencimento
+    </label>
+    <div class="dialog-buttons">
+      <button type="button" class="danger" id="delBtn" hidden>Excluir</button>
+      <button type="button" id="cancelBtn">Cancelar</button>
+      <button type="submit" class="primary">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(() => {
+  const KEY = "minhas-contas-v1";
+  const NOTIFY_KEY = "minhas-contas-avisos";
+  const DAYS_AHEAD = 3;
+  const fmt = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
+  let accounts = [];
+  let filter = "all";
+  let editingId = null;
+
+  // Mês no formato AAAA-MM. "paid" guarda os meses já pagos de cada conta,
+  // e cada entrada vale como uma parcela (ou um mês, em conta mensal fixa).
+  const monthKey = (d = new Date()) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const cur = () => monthKey();
+  function addMonths(key, n) {
+    const [y, m] = key.split("-").map(Number);
+    return monthKey(new Date(y, m - 1 + n, 1));
+  }
+
+  function migrate(list) {
+    return list.map(a => {
+      if (!Array.isArray(a.paid)) a.paid = a.paidMonth ? [a.paidMonth] : [];
+      delete a.paidMonth;
+      a.paid = a.paid.map(k => k.replace(/-(\d)$/, "-0$1"));
+      return a;
+    });
+  }
+
+  function load() {
+    try { accounts = migrate(JSON.parse(localStorage.getItem(KEY) || "[]")); }
+    catch { accounts = []; }
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(accounts)); }
+    catch { alert("Não foi possível salvar os dados neste navegador."); }
+  }
+
+  const isPaidNow = a => a.paid.includes(cur());
+  const isDone = a => a.installments != null && a.paid.length >= a.installments;
+  function statusOf(a) {
+    if (isDone(a)) return "done";
+    if (isPaidNow(a)) return "paid";
+    return new Date().getDate() > a.due ? "late" : "open";
+  }
+
+  function toggleCurrent(a) {
+    const k = cur();
+    a.paid = isPaidNow(a) ? a.paid.filter(x => x !== k) : [...a.paid, k];
+  }
+  // Paga a próxima parcela pendente, mesmo que o mês ainda não tenha chegado.
+  function advance(a) {
+    const last = a.paid.length ? [...a.paid].sort().pop() : addMonths(cur(), -1);
+    a.paid = [...a.paid, addMonths(last, 1)];
+  }
+
+  function changed() { save(); render(); }
+
+  function render() {
+    const list = document.getElementById("list");
+    const items = accounts
+      .filter(a => {
+        if (filter === "all") return true;
+        if (filter === "paid") return isPaidNow(a);
+        if (filter === "done") return isDone(a);
+        return statusOf(a) === filter;
+      })
+      .sort((a, b) => a.due - b.due);
+
+    let open = 0, paid = 0;
+    accounts.forEach(a => {
+      if (isPaidNow(a)) paid += +a.amount;
+      else if (!isDone(a)) open += +a.amount;
+    });
+    document.getElementById("totalOpen").textContent = fmt.format(open);
+    document.getElementById("totalPaid").textContent = fmt.format(paid);
+
+    if (!items.length) {
+      list.innerHTML = `<div class="empty">Nenhuma conta aqui.<br>Toque no + para adicionar.</div>`;
+      return;
+    }
+    list.innerHTML = "";
+    items.forEach(a => list.appendChild(buildItem(a)));
+  }
+
+  function buildItem(a) {
+    const st = statusOf(a);
+    const label = { paid: "Paga", open: "Em aberto", late: "Atrasada", done: "Quitada" }[st];
+    const el = document.createElement("div");
+    el.className = "item";
+    el.innerHTML = `
+      <div class="info">
+        <div class="name"></div>
+        <div class="meta"></div>
+        <div class="prog"></div>
+      </div>
+      <div class="actions">
+        <div class="amount"></div>
+        <span class="badge ${st}">${label}</span>
+        <div class="btns"></div>
+      </div>`;
+    el.querySelector(".name").textContent = a.name;
+    el.querySelector(".meta").textContent =
+      `Vence dia ${a.due} · ${a.category}` + (a.notes ? ` · ${a.notes}` : "");
+    el.querySelector(".amount").textContent = fmt.format(+a.amount);
+
+    const prog = el.querySelector(".prog");
+    if (a.installments) {
+      const n = a.installments;
+      prog.textContent = `${Math.min(a.paid.length, n)} de ${n} parcelas pagas`;
+    } else {
+      prog.textContent = "Conta mensal fixa";
+    }
+
+    const btns = el.querySelector(".btns");
+    const add = (text, fn) => {
+      const b = document.createElement("button");
+      b.className = "btn-small";
+      b.textContent = text;
+      b.onclick = fn;
+      btns.appendChild(b);
+      return b;
+    };
+
+    if (!isDone(a)) {
+      add(isPaidNow(a) ? "Desmarcar" : "Marcar paga", () => { toggleCurrent(a); changed(); });
+      add("Adiantar próxima", () => { advance(a); changed(); });
+    }
+    if (a.pix) {
+      const pixBtn = add("Copiar PIX", async () => {
+        try {
+          await navigator.clipboard.writeText(a.pix);
+          pixBtn.textContent = "Copiado!";
+        } catch {
+          prompt("Copie a chave PIX:", a.pix);
+        }
+        setTimeout(() => pixBtn.textContent = "Copiar PIX", 1500);
+      });
+    }
+    add(a.notify === false ? "Ativar aviso" : "Desativar aviso", () => {
+      a.notify = a.notify === false;
+      changed();
+    });
+    add("Editar", () => openDialog(a));
+    return el;
+  }
+
+  const dlg = document.getElementById("dlg");
+  const form = document.getElementById("form");
+  const delBtn = document.getElementById("delBtn");
+
+  function openDialog(account = null) {
+    editingId = account ? account.id : null;
+    document.getElementById("dlgTitle").textContent = account ? "Editar conta" : "Nova conta";
+    delBtn.hidden = !account;
+    form.reset();
+    form.notify.checked = true;
+    if (account) {
+      form.name.value = account.name;
+      form.amount.value = account.amount;
+      form.due.value = account.due;
+      form.installments.value = account.installments ?? "";
+      form.category.value = account.category;
+      form.notes.value = account.notes || "";
+      form.pix.value = account.pix || "";
+      form.notify.checked = account.notify !== false;
+    }
+    dlg.showModal();
+  }
+
+  form.addEventListener("submit", e => {
+    e.preventDefault();
+    const n = parseInt(form.installments.value, 10);
+    const data = {
+      name: form.name.value.trim(),
+      amount: parseFloat(form.amount.value) || 0,
+      due: Math.min(31, Math.max(1, parseInt(form.due.value, 10) || 1)),
+      installments: n > 0 ? n : null,
+      category: form.category.value,
+      notes: form.notes.value.trim(),
+      pix: form.pix.value.trim(),
+      notify: form.notify.checked,
+    };
+    if (editingId) {
+      Object.assign(accounts.find(a => a.id === editingId), data);
+    } else {
+      accounts.push({
+        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+        paid: [],
+        ...data,
+      });
+    }
+    changed(); dlg.close();
+  });
+
+  delBtn.onclick = () => {
+    if (editingId && confirm("Excluir esta conta?")) {
+      accounts = accounts.filter(a => a.id !== editingId);
+      changed(); dlg.close();
+    }
+  };
+  document.getElementById("cancelBtn").onclick = () => dlg.close();
+  document.getElementById("addBtn").onclick = () => openDialog();
+
+  document.querySelectorAll(".chip[data-filter]").forEach(btn => btn.onclick = () => {
+    document.querySelectorAll(".chip[data-filter]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    filter = btn.dataset.filter;
+    render();
+  });
+
+  // Avisos: o iPhone só mostra notificações de um app instalado na Tela de Início
+  // (iOS 16.4+). Sem servidor, os avisos saem quando o app é aberto ou fica visível.
+  const notifyBtn = document.getElementById("notifyBtn");
+
+  function daysUntilDue(a) {
+    const today = new Date();
+    const due = new Date(today.getFullYear(), today.getMonth(), a.due);
+    const now = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    return Math.round((due - now) / 864e5);
+  }
+
+  function checkDue() {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    const today = new Date().toISOString().slice(0, 10);
+    let sent = {};
+    try { sent = JSON.parse(localStorage.getItem(NOTIFY_KEY) || "{}"); } catch {}
+    accounts.forEach(a => {
+      if (a.notify === false || isPaidNow(a) || isDone(a)) return;
+      const left = daysUntilDue(a);
+      if (left > DAYS_AHEAD) return;
+      const tag = `${a.id}-${today}`;
+      if (sent[tag]) return;
+      const body = left < 0 ? `Atrasada! Venceu dia ${a.due}.`
+        : left === 0 ? "Vence hoje."
+        : `Vence em ${left} dia(s), dia ${a.due}.`;
+      try {
+        new Notification(`${a.name} · ${fmt.format(+a.amount)}`, { body, tag, icon: "icon-192.png" });
+        sent[tag] = true;
+      } catch {}
+    });
+    try { localStorage.setItem(NOTIFY_KEY, JSON.stringify(sent)); } catch {}
+  }
+
+  function refreshNotifyBtn() {
+    if (!("Notification" in window)) { notifyBtn.hidden = true; return; }
+    notifyBtn.textContent = Notification.permission === "granted" ? "Avisos ativados" : "Ativar avisos";
+    notifyBtn.disabled = Notification.permission === "granted";
+  }
+
+  notifyBtn.onclick = async () => {
+    try { await Notification.requestPermission(); } catch {}
+    refreshNotifyBtn();
+    checkDue();
+  };
+
+  load();
+  render();
+  refreshNotifyBtn();
+  checkDue();
+  setInterval(checkDue, 60 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") { load(); render(); checkDue(); }
+  });
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
